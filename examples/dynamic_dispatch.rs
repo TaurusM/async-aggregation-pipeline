@@ -61,5 +61,5 @@ async fn main() {
         .spawn_output_filters()
         .await;
 
-    pipeline.run().await
+    pipeline.spin().await
 }

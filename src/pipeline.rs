@@ -142,9 +142,18 @@ impl<Item: Send + Sized + 'static, State: Send + 'static> Pipeline<Item, State> 
         self
     }
 
-    pub async fn run(self) -> ! {
+    pub async fn spin(self) -> ! {
         loop {
             time::sleep(Duration::from_secs(0xffffff)).await
         }
+    }
+
+    pub async fn setup_and_run(self) -> ! {
+        self.spawn_output_filters()
+            .await
+            .spawn_aggregators()
+            .await
+            .spin()
+            .await
     }
 }

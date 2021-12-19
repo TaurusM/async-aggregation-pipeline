@@ -68,10 +68,6 @@ async fn main() {
             Box::new(NotAMultipleOfFilter(5)),
         ])
         .add_output_filter(Print)
-        .spawn_aggregators()
-        .await
-        .spawn_output_filters()
-        .await
-        .run()
+        .setup_and_run()
         .await
 }

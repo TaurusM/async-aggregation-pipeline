@@ -64,5 +64,5 @@ async fn main() -> ! {
         .spawn_aggregators()
         .await;
 
-    pipeline.run().await
+    pipeline.spin().await
 }
