@@ -148,4 +148,3 @@ impl<Item: Send + Sized + 'static, State: Send + 'static> Pipeline<Item, State> 
         }
     }
 }
-
