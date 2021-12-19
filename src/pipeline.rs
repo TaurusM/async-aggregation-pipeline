@@ -108,8 +108,8 @@ impl<Item: Send + Sized + 'static, State: Send + 'static> Pipeline<Item, State> 
                         }
                     }
                 } else {
-                    trace!("Nothing in the queue, sleeping for 3 secs...");
-                    time::sleep(Duration::from_secs(3)).await;
+                    trace!("Nothing in the queue, sleeping for about a second...");
+                    time::sleep(Duration::from_millis(100)).await;
                 }
             }
         });
