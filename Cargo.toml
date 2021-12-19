@@ -1,0 +1,18 @@
+[package]
+name = "async-aggregation-pipeline"
+version = "0.1.0"
+edition = "2021"
+authors = ["Madeline S. <maddie@cafebabe.date>"]
+license = "ISC"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1.52"
+crossbeam-channel = "0.5.1"
+tokio = { version = "1.15.0", features = ["time", "rt"] }
+tracing = "0.1.29"
+
+[dev-dependencies]
+tokio = { version = "1.15.0", features = ["full"] }
+async-trait = "0.1.52"
