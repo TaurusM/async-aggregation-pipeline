@@ -10,7 +10,7 @@ pub struct LoadBalancerFilter<Item: Send + Sized + 'static> {
     cur_index: usize,
 }
 
-impl<Item: Send + Send + 'static> LoadBalancerFilter<Item> {
+impl<Item: Send + Sized + 'static> LoadBalancerFilter<Item> {
     pub fn new() -> Self {
         Self {
             filters: Vec::new(),
@@ -32,7 +32,7 @@ impl<Item: Send + Send + 'static> LoadBalancerFilter<Item> {
 }
 
 #[async_trait]
-impl<Item: Send + Send + 'static> OutputFilter for LoadBalancerFilter<Item> {
+impl<Item: Send + Sized + 'static> OutputFilter for LoadBalancerFilter<Item> {
     type Item = Item;
 
     async fn filter(&mut self, entry: Self::Item) -> Option<Self::Item> {
