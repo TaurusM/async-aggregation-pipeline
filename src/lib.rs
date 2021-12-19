@@ -16,10 +16,13 @@ pub mod aggregator;
 
 pub mod error;
 
+pub mod utils;
+
 pub mod prelude {
     pub use super::aggregator::{Aggregator, Context};
     pub use super::async_sender::AsyncSender;
     pub use super::error::{PipelineError, PipelineResult};
     pub use super::output_filter::OutputFilter;
     pub use super::pipeline::Pipeline;
+    pub use super::utils as pipeline_utils;
 }
