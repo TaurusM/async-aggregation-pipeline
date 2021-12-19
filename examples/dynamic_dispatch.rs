@@ -53,13 +53,13 @@ impl OutputFilter for Output {
 
 #[tokio::main]
 async fn main() {
-    Pipeline::new(())
+    let pipeline: Pipeline<Box<dyn Entry>> = Pipeline::new(())
         .add_aggregator(Input(true))
         .add_output_filter(Output)
         .spawn_aggregators()
         .await
         .spawn_output_filters()
-        .await
-        .run()
-        .await
+        .await;
+
+    pipeline.run().await
 }
