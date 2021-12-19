@@ -1,6 +1,6 @@
 #[async_trait]
 pub trait OutputFilter: Send + 'static {
-    type Item;
+    type Item: Sized + Send;
 
     async fn filter(&mut self, entry: Self::Item) -> Option<Self::Item>;
 }

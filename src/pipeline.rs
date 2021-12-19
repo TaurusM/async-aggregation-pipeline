@@ -10,32 +10,32 @@ use std::sync::{Arc, Mutex};
 use crossbeam_channel::Receiver;
 use tokio::time;
 
-/// The async aggregator pipeline. 
-/// An example for why generics are horrible. 
-pub struct Pipeline<Item: Send + 'static, State: Send + 'static = ()> {
-    /// List of OutputFilters to iterate over in the receiver task. 
-    filters: Vec<Box<dyn OutputFilter<Item = Box<Item>>>>,
+/// The async aggregator pipeline.
+/// An example for why generics are horrible.
+pub struct Pipeline<Item: Send + Sized + 'static, State: Send + 'static = ()> {
+    /// List of OutputFilters to iterate over in the receiver task.
+    filters: Vec<Box<dyn OutputFilter<Item = Item>>>,
 
-    /// List of aggregator tasks to spawn. 
+    /// List of aggregator tasks to spawn.
     aggregators: Vec<Box<dyn Aggregator<Item = Item, PipelineState = State>>>,
 
-    /// The number of aggregator tasks spawned so far. 
+    /// The number of aggregator tasks spawned so far.
     task_number: Option<usize>,
 
-    /// The sending part of the item pipeline. 
-    /// This will be cloned for each aggregator task spawned. 
-    sender: AsyncSender<Box<Item>>,
+    /// The sending part of the item pipeline.
+    /// This will be cloned for each aggregator task spawned.
+    sender: AsyncSender<Item>,
 
-    /// The receiving end of the item pipeline. 
-    /// There's only one and it will be taken after spawning the receiver task. 
-    receiver: Option<Receiver<Box<Item>>>,
+    /// The receiving end of the item pipeline.
+    /// There's only one and it will be taken after spawning the receiver task.
+    receiver: Option<Receiver<Item>>,
 
-    /// State that gets shared through the context struct 
+    /// State that gets shared through the context struct
     /// for the Aggregators
     state: Arc<Mutex<State>>,
 }
 
-impl<Item: Send + 'static, State: Send + 'static> Pipeline<Item, State> {
+impl<Item: Send + Sized + 'static, State: Send + 'static> Pipeline<Item, State> {
     pub fn new(state: State) -> Self {
         let (sender, receiver) = crossbeam_channel::unbounded();
 
@@ -49,15 +49,12 @@ impl<Item: Send + 'static, State: Send + 'static> Pipeline<Item, State> {
         }
     }
 
-    pub fn set_output_filters(
-        mut self,
-        filters: Vec<Box<dyn OutputFilter<Item = Box<Item>>>>,
-    ) -> Self {
+    pub fn set_output_filters(mut self, filters: Vec<Box<dyn OutputFilter<Item = Item>>>) -> Self {
         self.filters = filters;
         self
     }
 
-    pub fn add_output_filter(mut self, filter: impl OutputFilter<Item = Box<Item>>) -> Self {
+    pub fn add_output_filter(mut self, filter: impl OutputFilter<Item = Item>) -> Self {
         self.filters.push(Box::new(filter));
         self
     }
@@ -184,7 +181,7 @@ async fn _test() {
             &mut self,
             ctx: &mut Context<Self::Item, Self::PipelineState>,
         ) -> Result<(), PipelineError> {
-            ctx.sender.send(Box::new("".into())).await;
+            ctx.sender.send("".into()).await;
 
             Ok(())
         }

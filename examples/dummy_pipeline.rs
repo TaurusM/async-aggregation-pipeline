@@ -15,7 +15,7 @@ struct DummyAggregator {
 impl DummyAggregator {
     fn new() -> Self {
         Self {
-            values: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0]
+            values: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
         }
     }
 }
@@ -29,10 +29,13 @@ impl Aggregator for DummyAggregator {
         std::time::Duration::from_secs(5)
     }
 
-    async fn poll(&mut self, ctx: &mut Context<Self::Item, Self::PipelineState>) -> PipelineResult<()> {
+    async fn poll(
+        &mut self,
+        ctx: &mut Context<Self::Item, Self::PipelineState>,
+    ) -> PipelineResult<()> {
         if let Some(v) = self.values.pop() {
-            ctx.sender.send(Box::new(v)).await;
-        }        
+            ctx.sender.send(v).await;
+        }
 
         Ok(())
     }
@@ -43,10 +46,10 @@ struct DummyOutput;
 
 #[async_trait]
 impl OutputFilter for DummyOutput {
-    type Item = Box<u8>;
-    
+    type Item = u8;
+
     async fn filter(&mut self, entry: Self::Item) -> Option<Self::Item> {
-        println!("{}", *entry);
+        println!("{}", entry);
         None
     }
 }
