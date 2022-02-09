@@ -4,11 +4,19 @@ use crate::{
     output_filter::OutputFilter,
 };
 
+use futures::stream::{FuturesUnordered, StreamExt};
+
 use core::{mem, time::Duration};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use crossbeam_channel::Receiver;
-use tokio::time;
+use tokio::{signal, task::JoinHandle, time};
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub(crate) enum Command {
+    Continue,
+    Shutdown,
+}
 
 /// The async aggregator pipeline.
 /// An example for why generics are horrible.
@@ -24,15 +32,21 @@ pub struct Pipeline<Item: Send + Sized + 'static, State: Send + 'static = ()> {
 
     /// The sending part of the item pipeline.
     /// This will be cloned for each aggregator task spawned.
-    sender: AsyncSender<Item>,
+    item_sender: AsyncSender<Item>,
 
     /// The receiving end of the item pipeline.
     /// There's only one and it will be taken after spawning the receiver task.
-    receiver: Option<Receiver<Item>>,
+    item_receiver: Option<Receiver<Item>>,
+
+    cmd_flag: Arc<RwLock<Command>>,
 
     /// State that gets shared through the context struct
     /// for the Aggregators
     state: Arc<Mutex<State>>,
+
+    handles: Vec<JoinHandle<()>>,
+
+    output_handle: Option<JoinHandle<()>>,
 }
 
 impl<Item: Send + Sized + 'static, State: Send + 'static> Pipeline<Item, State> {
@@ -43,9 +57,12 @@ impl<Item: Send + Sized + 'static, State: Send + 'static> Pipeline<Item, State> 
             filters: Vec::new(),
             aggregators: Vec::new(),
             task_number: None,
-            sender: AsyncSender::new(sender, None),
-            receiver: Some(receiver),
+            item_sender: AsyncSender::new(sender, None),
+            item_receiver: Some(receiver),
+            cmd_flag: Arc::new(RwLock::new(Command::Continue)),
             state: Arc::new(Mutex::new(state)),
+            handles: Vec::new(),
+            output_handle: None,
         }
     }
 
@@ -89,15 +106,18 @@ impl<Item: Send + Sized + 'static, State: Send + 'static> Pipeline<Item, State> 
     /// This panics if it gets called more than one time
     pub async fn spawn_output_filters(mut self) -> Self {
         let receiver = self
-            .receiver
+            .item_receiver
             .take()
             .expect("Attempted to spawn receiver task twice (no receiver left)");
         let mut out_filters = mem::take(&mut self.filters);
 
-        tokio::spawn(async move {
+        let cmd_flag = Arc::clone(&self.cmd_flag);
+        let output_handle: JoinHandle<()> = tokio::spawn(async move {
             debug!("Spawned receiver task!");
 
-            loop {
+            let cmd_flag = Arc::clone(&cmd_flag);
+
+            'outer: loop {
                 if let Some(mut item) = receiver.try_recv().ok() {
                     debug!("Found a match!");
 
@@ -108,11 +128,21 @@ impl<Item: Send + Sized + 'static, State: Send + 'static> Pipeline<Item, State> 
                         }
                     }
                 } else {
+                    // if nothing is in the queue and the shutdown flag is set terminate the loop
+                    if let Ok(lock) = cmd_flag.read() {
+                        if *lock == Command::Shutdown {
+                            info!("Shutting down output filter loop");
+                            break 'outer;
+                        }
+                    }
+
                     trace!("Nothing in the queue, sleeping for about a second...");
                     time::sleep(Duration::from_millis(100)).await;
                 }
             }
         });
+
+        self.output_handle = Some(output_handle);
 
         self
     }
@@ -121,19 +151,40 @@ impl<Item: Send + Sized + 'static, State: Send + 'static> Pipeline<Item, State> 
         let mut task_number = self.task_number.map(|n| n + 1).unwrap_or(0);
 
         for mut aggregator in self.aggregators.drain(..) {
-            let mut ctx = Context::new(self.sender.clone(), Arc::clone(&self.state), task_number);
+            let mut ctx = Context::new(
+                self.item_sender.clone(),
+                Arc::clone(&self.state),
+                task_number,
+                Arc::clone(&self.cmd_flag),
+            );
 
-            tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 info!("Spawned aggregator task #{}", task_number);
 
-                loop {
+                let mut next = time::Instant::now();
+
+                'l: loop {
+                    if let Ok(lock) = ctx.cmd_flag.read() {
+                        if *lock == Command::Shutdown {
+                            info!("Shutting down task #{}", ctx.task_num());
+                            break 'l;
+                        }
+                    }
+
+                    if time::Instant::now() < next {
+                        time::sleep(Duration::from_secs(1)).await;
+                        continue;
+                    }
+
                     if let Err(why) = aggregator.poll(&mut ctx).await {
                         error!("{:?}", why)
                     }
 
-                    time::sleep(aggregator.sleep_duration()).await;
+                    next += aggregator.sleep_duration();
                 }
             });
+
+            self.handles.push(handle);
 
             task_number += 1;
         }
@@ -142,13 +193,36 @@ impl<Item: Send + Sized + 'static, State: Send + 'static> Pipeline<Item, State> 
         self
     }
 
-    pub async fn spin(self) -> ! {
-        loop {
-            time::sleep(Duration::from_secs(0xffffff)).await
+    pub async fn shutdown(self) {
+        {
+            let mut lock = self.cmd_flag.write().unwrap();
+            *lock = Command::Shutdown;
+            info!("Set command flag to SHUTDOWN");
+        }
+
+        info!("Waiting for aggregators to finish...");
+
+        let mut handles: FuturesUnordered<JoinHandle<()>> = self.handles.into_iter().collect();
+
+        while let Some(r) = handles.next().await {
+            if let Err(e) = r {
+                error!("aggregator threw an error while terminating: {}", e);
+            }
+        }
+
+        if let Some(h) = self.output_handle {
+            info!("Processing leftover aggregated data");
+            h.await.ok();
         }
     }
 
-    pub async fn setup_and_run(self) -> ! {
+    pub async fn spin(self) {
+        if let Ok(_) = signal::ctrl_c().await {
+            self.shutdown().await;
+        }
+    }
+
+    pub async fn setup_and_run(self) {
         self.spawn_output_filters()
             .await
             .spawn_aggregators()

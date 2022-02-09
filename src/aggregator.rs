@@ -1,16 +1,17 @@
-use crate::{async_sender::AsyncSender, error::PipelineResult};
+use crate::{async_sender::AsyncSender, error::PipelineResult, pipeline::Command};
 use core::{
     any::type_name,
     fmt::{self, Debug},
     time::Duration,
 };
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 /// A context struct that will be passed to each time an [`Aggregator`] is polled.
 pub struct Context<Item: Send + Sized + 'static, State> {
     pub sender: AsyncSender<Item>,
     task_num: usize,
     pub state: Arc<Mutex<State>>,
+    pub(crate) cmd_flag: Arc<RwLock<Command>>,
 }
 
 impl<Item: Send + Sized + 'static, State> Context<Item, State> {
@@ -19,11 +20,13 @@ impl<Item: Send + Sized + 'static, State> Context<Item, State> {
         sender: AsyncSender<Item>,
         state: Arc<Mutex<State>>,
         task_num: usize,
+        cmd_flag: Arc<RwLock<Command>>,
     ) -> Self {
         Self {
             sender,
             state,
             task_num,
+            cmd_flag,
         }
     }
 

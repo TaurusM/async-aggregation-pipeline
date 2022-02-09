@@ -55,7 +55,7 @@ impl OutputFilter for DummyOutput {
 }
 
 #[tokio::main]
-async fn main() -> ! {
+async fn main() {
     let pipeline: Pipeline<u8, DummyState> = Pipeline::new(DummyState(String::from("cool")))
         .add_aggregator(DummyAggregator::new())
         .add_output_filter(DummyOutput)

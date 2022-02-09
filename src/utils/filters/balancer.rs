@@ -2,9 +2,9 @@ use crate::output_filter::OutputFilter;
 
 /// A filter that will iterate through all inner filters
 /// one by one.
-/// 
+///
 /// Useful for e.g. balancing the load between multiple webhooks
-/// to get around rate limiting. 
+/// to get around rate limiting.
 pub struct LoadBalancerFilter<Item: Send + Sized + 'static> {
     filters: Vec<Box<dyn OutputFilter<Item = Item>>>,
     cur_index: usize,
@@ -14,7 +14,7 @@ impl<Item: Send + Sized + 'static> LoadBalancerFilter<Item> {
     pub fn new() -> Self {
         Self {
             filters: Vec::new(),
-            cur_index: 0
+            cur_index: 0,
         }
     }
 
