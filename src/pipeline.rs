@@ -39,6 +39,7 @@ pub struct Pipeline<Item: Send + Sized + 'static, State: Send + 'static = ()> {
     item_receiver: Option<Receiver<Item>>,
 
     cmd_flag: Arc<RwLock<Command>>,
+    output_cmd_flag: Arc<RwLock<Command>>,
 
     /// State that gets shared through the context struct
     /// for the Aggregators
@@ -60,6 +61,7 @@ impl<Item: Send + Sized + 'static, State: Send + 'static> Pipeline<Item, State> 
             item_sender: AsyncSender::new(sender, None),
             item_receiver: Some(receiver),
             cmd_flag: Arc::new(RwLock::new(Command::Continue)),
+            output_cmd_flag: Arc::new(RwLock::new(Command::Continue)),
             state: Arc::new(Mutex::new(state)),
             handles: Vec::new(),
             output_handle: None,
@@ -111,11 +113,11 @@ impl<Item: Send + Sized + 'static, State: Send + 'static> Pipeline<Item, State> 
             .expect("Attempted to spawn receiver task twice (no receiver left)");
         let mut out_filters = mem::take(&mut self.filters);
 
-        let cmd_flag = Arc::clone(&self.cmd_flag);
+        let output_cmd_flag = Arc::clone(&self.output_cmd_flag);
         let output_handle: JoinHandle<()> = tokio::spawn(async move {
             debug!("Spawned receiver task!");
 
-            let cmd_flag = Arc::clone(&cmd_flag);
+            let output_cmd_flag = Arc::clone(&output_cmd_flag);
 
             'outer: loop {
                 if let Some(mut item) = receiver.try_recv().ok() {
@@ -129,7 +131,7 @@ impl<Item: Send + Sized + 'static, State: Send + 'static> Pipeline<Item, State> 
                     }
                 } else {
                     // if nothing is in the queue and the shutdown flag is set terminate the loop
-                    if let Ok(lock) = cmd_flag.read() {
+                    if let Ok(lock) = output_cmd_flag.read() {
                         if *lock == Command::Shutdown {
                             info!("Shutting down output filter loop");
                             break 'outer;
@@ -197,7 +199,7 @@ impl<Item: Send + Sized + 'static, State: Send + 'static> Pipeline<Item, State> 
         {
             let mut lock = self.cmd_flag.write().unwrap();
             *lock = Command::Shutdown;
-            info!("Set command flag to SHUTDOWN");
+            info!("Set aggregator command flag to SHUTDOWN");
         }
 
         info!("Waiting for aggregators to finish...");
@@ -208,6 +210,12 @@ impl<Item: Send + Sized + 'static, State: Send + 'static> Pipeline<Item, State> 
             if let Err(e) = r {
                 error!("aggregator threw an error while terminating: {}", e);
             }
+        }
+
+        {
+            let mut lock = self.output_cmd_flag.write().unwrap();
+            *lock = Command::Shutdown;
+            info!("Set output filter command flag to SHUTDOWN");
         }
 
         if let Some(h) = self.output_handle {
