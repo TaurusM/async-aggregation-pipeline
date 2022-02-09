@@ -38,7 +38,10 @@ pub struct Pipeline<Item: Send + Sized + 'static, State: Send + 'static = ()> {
     /// There's only one and it will be taken after spawning the receiver task.
     item_receiver: Option<Receiver<Item>>,
 
+    /// Internal flag telling the aggregator loops whether or not to shut down
     cmd_flag: Arc<RwLock<Command>>,
+
+    /// Internal flag telling the output filter loop whether or not to shut down
     output_cmd_flag: Arc<RwLock<Command>>,
 
     /// State that gets shared through the context struct
