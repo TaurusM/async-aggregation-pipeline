@@ -39,10 +39,14 @@ impl<Item: Send + Sized + 'static> OutputFilter for LoadBalancerFilter<Item> {
     type Item = Item;
 
     async fn filter(&mut self, entry: Self::Item) -> Option<Self::Item> {
+        if self.filters.len() == 0 {
+            return Some(entry);
+        }
+
         let filter = self
             .filters
             .get_mut(self.cur_index)
-            .expect("should never happen unless you didnt add any filters");
+            .expect("see check above");
 
         let res = filter.filter(entry).await;
         self.cur_index = (self.cur_index + 1) % self.filters.len();
