@@ -11,4 +11,4 @@ impl fmt::Display for PipelineError {
 
 impl Error for PipelineError {}
 
-pub type PipelineResult<T> = Result<T, PipelineError>;
+pub type PipelineResult<T> = Result<T, Box<dyn Error>>;

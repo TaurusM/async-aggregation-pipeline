@@ -8,20 +8,23 @@ use crate::output_filter::OutputFilter;
 pub struct LoadBalancerFilter<Item: Send + Sized + 'static> {
     filters: Vec<Box<dyn OutputFilter<Item = Item>>>,
     cur_index: usize,
+    identifier: String,
 }
 
 impl<Item: Send + Sized + 'static> LoadBalancerFilter<Item> {
-    pub fn new() -> Self {
+    pub fn new(identifier: String) -> Self {
         Self {
             filters: Vec::new(),
             cur_index: 0,
+            identifier,
         }
     }
 
-    pub fn from(filters: Vec<Box<dyn OutputFilter<Item = Item>>>) -> Self {
+    pub fn from(identifier: String, filters: Vec<Box<dyn OutputFilter<Item = Item>>>) -> Self {
         Self {
             filters,
             cur_index: 0,
+            identifier,
         }
     }
 
@@ -44,5 +47,9 @@ impl<Item: Send + Sized + 'static> OutputFilter for LoadBalancerFilter<Item> {
         let res = filter.filter(entry).await;
         self.cur_index = (self.cur_index + 1) % self.filters.len();
         res
+    }
+
+    fn on_load(&mut self) {
+        info!("Loading LoadBalancerFilter(\"{}\") with {} wrapped filters", self.identifier, self.filters.len())
     }
 }

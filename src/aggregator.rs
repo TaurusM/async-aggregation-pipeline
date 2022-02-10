@@ -66,4 +66,6 @@ pub trait Aggregator: Debug + Send + Sync + 'static {
         &mut self,
         ctx: &mut Context<Self::Item, Self::PipelineState>,
     ) -> PipelineResult<()>;
+
+    fn on_load(&mut self) {}
 }
